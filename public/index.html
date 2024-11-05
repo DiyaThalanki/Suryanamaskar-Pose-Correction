@@ -31,13 +31,6 @@
         let avatar, avatarSkeleton, avatarBones = {};
         let studioModel;
 
-        // Add quaternion utilities
-        const quatFromEuler = (x, y, z) => {
-            const quat = new THREE.Quaternion();
-            const euler = new THREE.Euler(x, y, z, 'XYZ');
-            return quat.setFromEuler(euler);
-        };
-
         async function setupCamera() {
             const video = document.getElementById('video');
             const stream = await navigator.mediaDevices.getUserMedia({ video: true });
@@ -46,8 +39,6 @@
                 video.onloadedmetadata = () => { resolve(video); };
             });
         }
-
-        
 
         function init3DScene() {
             scene = new THREE.Scene();
@@ -130,90 +121,72 @@
             );
         }
 
-        function calculateJointRotation(keypoints, joint1, joint2, joint3) {
-            const p1 = keypoints.find(kp => kp.part === joint1);
-            const p2 = keypoints.find(kp => kp.part === joint2);
-            const p3 = keypoints.find(kp => kp.part === joint3);
-
-            if (p1 && p2 && p3 && p1.score > 0.5 && p2.score > 0.5 && p3.score > 0.5) {
-                // Calculate vectors
-                const v1 = new THREE.Vector3(
-                    p2.position.x - p1.position.x,
-                    p2.position.y - p1.position.y,
-                    0
-                );
-                const v2 = new THREE.Vector3(
-                    p3.position.x - p2.position.x,
-                    p3.position.y - p2.position.y,
-                    0
-                );
-
-                // Calculate angle
-                return Math.atan2(v2.y, v2.x) - Math.atan2(v1.y, v1.x);
-            }
-            return null;
-        }
-
         function updateAvatarPose(keypoints) {
-            if (!avatar || !avatarSkeleton) return;
-
-            // Update arm rotations
-            const leftArmAngle = calculateJointRotation(keypoints, 'leftShoulder', 'leftElbow', 'leftWrist');
-            const rightArmAngle = calculateJointRotation(keypoints, 'rightShoulder', 'rightElbow', 'rightWrist');
-            
-            if (leftArmAngle !== null && avatarBones['leftArm']) {
-                const rotation = quatFromEuler(0, 0, leftArmAngle);
-                avatarBones['leftArm'].quaternion.copy(rotation);
-            }
-
-            if (rightArmAngle !== null && avatarBones['rightArm']) {
-                const rotation = quatFromEuler(0, 0, rightArmAngle);
-                avatarBones['rightArm'].quaternion.copy(rotation);
-            }
-
-            // Update leg rotations
-            const leftLegAngle = calculateJointRotation(keypoints, 'leftHip', 'leftKnee', 'leftAnkle');
-            const rightLegAngle = calculateJointRotation(keypoints, 'rightHip', 'rightKnee', 'rightAnkle');
-
-            if (leftLegAngle !== null && avatarBones['leftLeg']) {
-                const rotation = quatFromEuler(0, 0, leftLegAngle);
-                avatarBones['leftLeg'].quaternion.copy(rotation);
-            }
-
-            if (rightLegAngle !== null && avatarBones['rightLeg']) {
-                const rotation = quatFromEuler(0, 0, rightLegAngle);
-                avatarBones['rightLeg'].quaternion.copy(rotation);
-            }
-
-            // Update spine/torso rotation based on shoulders and hips
-            const torsoKeypoints = keypoints.filter(kp => 
-                ['leftShoulder', 'rightShoulder', 'leftHip', 'rightHip'].includes(kp.part)
-            );
-
-            if (torsoKeypoints.length === 4 && torsoKeypoints.every(kp => kp.score > 0.5)) {
-                const shoulderCenter = {
-                    x: (torsoKeypoints[0].position.x + torsoKeypoints[1].position.x) / 2,
-                    y: (torsoKeypoints[0].position.y + torsoKeypoints[1].position.y) / 2
-                };
-                const hipCenter = {
-                    x: (torsoKeypoints[2].position.x + torsoKeypoints[3].position.x) / 2,
-                    y: (torsoKeypoints[2].position.y + torsoKeypoints[3].position.y) / 2
-                };
-
-                const torsoAngle = Math.atan2(
-                    shoulderCenter.y - hipCenter.y,
-                    shoulderCenter.x - hipCenter.x
-                );
-
-                if (avatarBones['spine']) {
-                    const rotation = quatFromEuler(0, 0, torsoAngle);
-                    avatarBones['spine'].quaternion.copy(rotation);
+            keypoints.forEach((keypoint) => {
+                let boneName;
+                switch (keypoint.part) {
+                    case 'nose':
+                        boneName = 'Nose';
+                        break;
+                    case 'leftEye':
+                        boneName = 'LeftEye';
+                        break;
+                    case 'rightEye':
+                        boneName = 'RightEye';
+                        break;
+                    case 'leftEar':
+                        boneName = 'LeftEar';
+                        break;
+                    case 'rightEar':
+                        boneName = 'RightEar';
+                        break;
+                    case 'leftShoulder':
+                        boneName = 'LeftShoulder';
+                        break;
+                    case 'rightShoulder':
+                        boneName = 'RightShoulder';
+                        break;
+                    case 'leftElbow':
+                        boneName = 'LeftElbow';
+                        break;
+                    case 'rightElbow':
+                        boneName = 'RightElbow';
+                        break;
+                    case 'leftWrist':
+                        boneName = 'LeftWrist';
+                        break;
+                    case 'rightWrist':
+                        boneName = 'RightWrist';
+                        break;
+                    case 'leftHip':
+                        boneName = 'LeftHip';
+                        break;
+                    case 'rightHip':
+                        boneName = 'RightHip';
+                        break;
+                    case 'leftKnee':
+                        boneName = 'LeftKnee';
+                        break;
+                    case 'rightKnee':
+                        boneName = 'RightKnee';
+                        break;
+                    case 'leftAnkle':
+                        boneName = 'LeftAnkle';
+                        break;
+                    case 'rightAnkle':
+                        boneName = 'RightAnkle';
+                        break;
+                    default:
+                        boneName = null;
                 }
-            }
 
-            if (avatarSkeleton) {
-                avatarSkeleton.update();
-            }
+                const bone = avatar.getObjectByName(boneName);
+                if (bone && keypoint.score > 0.5) {
+                    let x = (keypoint.position.x / video.width) * 2 - 1;
+                    let y = -(keypoint.position.y / video.height) * 2 + 1;
+                    bone.position.set(x, y, 0);
+                }
+            });
         }
 
         async function detectPose() {
@@ -223,59 +196,25 @@
 
             const canvas = document.getElementById('output');
             const ctx = canvas.getContext('2d');
-            const status = document.getElementById('status');
-
-            const rect = { x: 150, y: 100, width: 275, height: 575 };
-
-            function drawRectangle() {
-                ctx.strokeStyle = 'blue';
-                ctx.lineWidth = 4;
-                // ctx.strokeRect(rect.x, rect.y, rect.width, rect.height);
-                ctx.beginPath();
-                ctx.moveTo(250,650);
-                ctx.lineTo(500,650);
-                ctx.lineTo(500,300);
-                ctx.lineTo(700,300);
-                ctx.lineTo(700,200);
-                ctx.lineTo(500,200);
-                ctx.lineTo(500,50);
-                ctx.lineTo(250,50);
-                ctx.lineTo(250,200);
-                ctx.lineTo(50,200);
-                ctx.lineTo(50,300);
-                ctx.lineTo(250,300);
-                ctx.lineTo(250,650);
-                ctx.stroke();
-            }
-
-            function areKeypointsInsideRect(keypoints) {
-                return keypoints.every((keypoint) => {
-                    const { x, y } = keypoint.position;
-                    if (200<=y<=300)
-                {
-                    return x>=50 && x<=700;
-                }
-                else
-                {
-                    return x>=250 && x<=500 && y>=650 && y<=50;
-                }
-
-                    // return x >= rect.x && x <= rect.x + rect.width &&
-                    //        y >= rect.y && y <= rect.y + rect.height;
-                });
-            }
 
             async function poseDetectionFrame() {
-                const pose = await net.estimateSinglePose(video, { flipHorizontal: false });
+                const pose = await net.estimateSinglePose(video, {
+                    flipHorizontal: false,
+                    decodingMethod: 'single-person'
+                });
 
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
                 ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-                drawRectangle();
-
-                const allKeypointsInside = areKeypointsInsideRect(pose.keypoints);
-                status.textContent = allKeypointsInside ? 'Correct' : 'Incorrect';
-                status.style.color = allKeypointsInside ? 'green' : 'red';
+                // Draw detected pose
+                pose.keypoints.forEach(keypoint => {
+                    if (keypoint.score > 0.5) {
+                        ctx.beginPath();
+                        ctx.arc(keypoint.position.x, keypoint.position.y, 5, 0, 2 * Math.PI);
+                        ctx.fillStyle = 'red';
+                        ctx.fill();
+                    }
+                });
 
                 updateAvatarPose(pose.keypoints);
                 requestAnimationFrame(poseDetectionFrame);

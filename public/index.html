@@ -90,131 +90,251 @@
         }
 
         function loadAvatar() {
-            const loader = new THREE.GLTFLoader();
-            loader.load('model.glb',
-                (gltf) => {
-                    avatar = gltf.scene;
-                    avatar.position.set(0, 0, 0);
-                    avatar.scale.set(1, 1, 1);
-                    scene.add(avatar);
+    const loader = new THREE.GLTFLoader();
+    loader.load('model.glb',
+        (gltf) => {
+            avatar = gltf.scene;
+            avatar.position.set(0, 0, 0);
+            avatar.scale.set(1, 1, 1);
+            scene.add(avatar);
 
-                    avatar.traverse((node) => {
-                        if (node.isMesh) {
-                            node.castShadow = true;
-                            node.receiveShadow = true;
-                        }
-                        if (node.isBone) {
-                            avatarBones[node.name] = node;
-                        }
-                        if (node.isSkinnedMesh) {
-                            avatarSkeleton = node.skeleton;
-                        }
-                    });
-
-                    // Store initial bone rotations
-                    Object.values(avatarBones).forEach(bone => {
-                        bone.initialRotation = bone.rotation.clone();
-                    });
-                },
-                undefined,
-                (error) => console.error('Error loading avatar:', error)
-            );
-        }
-
-        function updateAvatarPose(keypoints) {
-            keypoints.forEach((keypoint) => {
-                let boneName;
-                switch (keypoint.part) {
-                    case 'nose':
-                        boneName = 'Nose';
-                        break;
-                    case 'leftEye':
-                        boneName = 'LeftEye';
-                        break;
-                    case 'rightEye':
-                        boneName = 'RightEye';
-                        break;
-                    case 'leftEar':
-                        boneName = 'LeftEar';
-                        break;
-                    case 'rightEar':
-                        boneName = 'RightEar';
-                        break;
-                    case 'leftShoulder':
-                        boneName = 'LeftShoulder';
-                        break;
-                    case 'rightShoulder':
-                        boneName = 'RightShoulder';
-                        break;
-                    case 'leftElbow':
-                        boneName = 'LeftElbow';
-                        break;
-                    case 'rightElbow':
-                        boneName = 'RightElbow';
-                        break;
-                    case 'leftWrist':
-                        boneName = 'LeftWrist';
-                        break;
-                    case 'rightWrist':
-                        boneName = 'RightWrist';
-                        break;
-                    case 'leftHip':
-                        boneName = 'LeftHip';
-                        break;
-                    case 'rightHip':
-                        boneName = 'RightHip';
-                        break;
-                    case 'leftKnee':
-                        boneName = 'LeftKnee';
-                        break;
-                    case 'rightKnee':
-                        boneName = 'RightKnee';
-                        break;
-                    case 'leftAnkle':
-                        boneName = 'LeftAnkle';
-                        break;
-                    case 'rightAnkle':
-                        boneName = 'RightAnkle';
-                        break;
-                    default:
-                        boneName = null;
-                }
-
-                const bone = avatar.getObjectByName(boneName);
-                if (bone && keypoint.score > 0.5) {
-                    let x = (keypoint.position.x / video.width) * 2 - 1;
-                    let y = -(keypoint.position.y / video.height) * 2 + 1;
-                    bone.position.set(x, y, 0);
+            // Create sorted list of all bone names
+            const boneNames = [];
+            avatar.traverse((node) => {
+                if (node.isBone) {
+                    boneNames.push(node.name);
+                    avatarBones[node.name] = node;
                 }
             });
-        }
 
-        async function detectPose() {
+            // Print all bone names in alphabetical order
+            console.log('=== Available Bones ===');
+            boneNames.sort().forEach(name => {
+                console.log(name);
+            });
+            console.log('====================');
+
+            // Store initial bone rotations
+            Object.values(avatarBones).forEach(bone => {
+                bone.initialRotation = bone.rotation.clone();
+            });
+        },
+        undefined,
+        (error) => console.error('Error loading avatar:', error)
+    );
+}
+
+function calculateJointAngles(keypoints) {
+    // Helper function to get keypoint position
+    const getPoint = (name) => {
+        const point = keypoints.find(kp => kp.part === name);
+        return point && point.score > 0.5 ? point.position : null;
+    };
+
+    // Helper function to calculate angle between three points
+    function calculateAngle(p1, p2, p3) {
+        if (!p1 || !p2 || !p3) return null;
+        
+        const v1 = new THREE.Vector2(p1.x - p2.x, p1.y - p2.y);
+        const v2 = new THREE.Vector2(p3.x - p2.x, p3.y - p2.y);
+        
+        let angle = Math.atan2(v2.y, v2.x) - Math.atan2(v1.y, v1.x);
+        // Normalize angle to [-π, π]
+        if (angle > Math.PI) angle -= 2 * Math.PI;
+        if (angle < -Math.PI) angle += 2 * Math.PI;
+        
+        return angle;
+    }
+
+    // Get all relevant keypoints
+    const spine = getPoint('nose');
+    const leftShoulder = getPoint('leftShoulder');
+    const rightShoulder = getPoint('rightShoulder');
+    const leftElbow = getPoint('leftElbow');
+    const rightElbow = getPoint('rightElbow');
+    const leftWrist = getPoint('leftWrist');
+    const rightWrist = getPoint('rightWrist');
+    const leftHip = getPoint('leftHip');
+    const rightHip = getPoint('rightHip');
+    const leftKnee = getPoint('leftKnee');
+    const rightKnee = getPoint('rightKnee');
+    const leftAnkle = getPoint('leftAnkle');
+    const rightAnkle = getPoint('rightAnkle');
+
+    // Calculate spine angle (overall body tilt)
+    const spineAngle = spine && leftHip ? 
+        Math.atan2(spine.y - leftHip.y, spine.x - leftHip.x) :
+        null;
+
+    const angles = {
+        spine: spineAngle,
+        leftShoulder: null,
+        rightShoulder: null,
+        leftElbow: null,
+        rightElbow: null,
+        leftHip: null,
+        rightHip: null,
+        leftKnee: null,
+        rightKnee: null
+    };
+
+    // Only calculate angles if required points are present
+    if (leftShoulder && leftElbow) {
+        angles.leftShoulder = calculateAngle(
+            { x: leftShoulder.x + 50, y: leftShoulder.y },
+            leftShoulder,
+            leftElbow
+        );
+    }
+
+    if (rightShoulder && rightElbow) {
+        angles.rightShoulder = calculateAngle(
+            { x: rightShoulder.x - 50, y: rightShoulder.y },
+            rightShoulder,
+            rightElbow
+        );
+    }
+
+    if (leftShoulder && leftElbow && leftWrist) {
+        angles.leftElbow = calculateAngle(leftShoulder, leftElbow, leftWrist);
+    }
+
+    if (rightShoulder && rightElbow && rightWrist) {
+        angles.rightElbow = calculateAngle(rightShoulder, rightElbow, rightWrist);
+    }
+
+    if (leftHip && leftKnee) {
+        angles.leftHip = calculateAngle(
+            { x: leftHip.x, y: leftHip.y - 50 },
+            leftHip,
+            leftKnee
+        );
+    }
+
+    if (rightHip && rightKnee) {
+        angles.rightHip = calculateAngle(
+            { x: rightHip.x, y: rightHip.y - 50 },
+            rightHip,
+            rightKnee
+        );
+    }
+
+    if (leftHip && leftKnee && leftAnkle) {
+        angles.leftKnee = calculateAngle(leftHip, leftKnee, leftAnkle);
+    }
+
+    if (rightHip && rightKnee && rightAnkle) {
+        angles.rightKnee = calculateAngle(rightHip, rightKnee, rightAnkle);
+    }
+
+    return angles;
+}
+
+function updateAvatarPose(keypoints) {
+    if (!avatar) return;
+
+    const angles = calculateJointAngles(keypoints);
+    
+    // Helper function to safely update bone rotation
+    function updateBoneRotation(boneName, angle, axis = 'z', multiplier = 1) {
+        const bone = avatarBones[boneName];
+        if (bone && angle !== null) {
+            // Reset rotation to initial state first
+            if (bone.initialRotation) {
+                bone.rotation.copy(bone.initialRotation);
+            }
+            // Apply new rotation
+            bone.rotation[axis] += angle * multiplier;
+        }
+    }
+
+    // Update spine and upper body
+    if (angles.spine !== null) {
+        updateBoneRotation('Spine', angles.spine, 'z', 0.3);
+        updateBoneRotation('Spine1', angles.spine, 'z', 0.3);
+        updateBoneRotation('Spine2', angles.spine, 'z', 0.3);
+    }
+
+    // Update shoulders
+    updateBoneRotation('LeftShoulder', angles.leftShoulder, 'z', 1);
+    updateBoneRotation('RightShoulder', angles.rightShoulder, 'z', -1);
+
+    // Update arms
+    updateBoneRotation('LeftArm', angles.leftShoulder, 'x', 1);
+    updateBoneRotation('RightArm', angles.rightShoulder, 'x', -1);
+
+    // Update forearms (elbows)
+    updateBoneRotation('LeftForeArm', angles.leftElbow, 'x', 1);
+    updateBoneRotation('RightForeArm', angles.rightElbow, 'x', -1);
+
+    // Update legs
+    updateBoneRotation('LeftUpLeg', angles.leftHip, 'x', 1);
+    updateBoneRotation('RightUpLeg', angles.rightHip, 'x', -1);
+
+    // Update knees
+    updateBoneRotation('LeftLeg', angles.leftKnee, 'x', 1);
+    updateBoneRotation('RightLeg', angles.rightKnee, 'x', -1);
+}
+async function detectPose() {
             const net = await posenet.load();
             const video = await setupCamera();
             video.play();
 
             const canvas = document.getElementById('output');
             const ctx = canvas.getContext('2d');
+            const status = document.getElementById('status');
+
+            const rect = { x: 150, y: 100, width: 275, height: 575 };
+
+            function drawRectangle() {
+                ctx.strokeStyle = 'blue';
+                ctx.lineWidth = 4;
+                // ctx.strokeRect(rect.x, rect.y, rect.width, rect.height);
+                ctx.beginPath();
+                ctx.moveTo(250,650);
+                ctx.lineTo(500,650);
+                ctx.lineTo(500,300);
+                ctx.lineTo(700,300);
+                ctx.lineTo(700,200);
+                ctx.lineTo(500,200);
+                ctx.lineTo(500,50);
+                ctx.lineTo(250,50);
+                ctx.lineTo(250,200);
+                ctx.lineTo(50,200);
+                ctx.lineTo(50,300);
+                ctx.lineTo(250,300);
+                ctx.lineTo(250,650);
+                ctx.stroke();
+            }
+
+            function areKeypointsInsideRect(keypoints) {
+                return keypoints.every((keypoint) => {
+                    const { x, y } = keypoint.position;
+                    if (200<=y<=300)
+                {
+                    return x>=50 && x<=700;
+                }
+                else
+                {
+                    return x>=250 && x<=500 && y>=650 && y<=50;
+                }
+
+                    // return x >= rect.x && x <= rect.x + rect.width &&
+                    //        y >= rect.y && y <= rect.y + rect.height;
+                });
+            }
 
             async function poseDetectionFrame() {
-                const pose = await net.estimateSinglePose(video, {
-                    flipHorizontal: false,
-                    decodingMethod: 'single-person'
-                });
+                const pose = await net.estimateSinglePose(video, { flipHorizontal: false });
 
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
                 ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-                // Draw detected pose
-                pose.keypoints.forEach(keypoint => {
-                    if (keypoint.score > 0.5) {
-                        ctx.beginPath();
-                        ctx.arc(keypoint.position.x, keypoint.position.y, 5, 0, 2 * Math.PI);
-                        ctx.fillStyle = 'red';
-                        ctx.fill();
-                    }
-                });
+                drawRectangle();
+
+                const allKeypointsInside = areKeypointsInsideRect(pose.keypoints);
+                status.textContent = allKeypointsInside ? 'Correct' : 'Incorrect';
+                status.style.color = allKeypointsInside ? 'green' : 'red';
 
                 updateAvatarPose(pose.keypoints);
                 requestAnimationFrame(poseDetectionFrame);
@@ -222,7 +342,6 @@
 
             poseDetectionFrame();
         }
-
         function onWindowResize() {
             camera.aspect = window.innerWidth / 2 / window.innerHeight;
             camera.updateProjectionMatrix();

@@ -90,6 +90,8 @@
         }
 
         function loadAvatar() {
+            
+
     const loader = new THREE.GLTFLoader();
     loader.load('model.glb',
         (gltf) => {
@@ -97,6 +99,7 @@
             avatar.position.set(0, 0, 0);
             avatar.scale.set(1, 1, 1);
             scene.add(avatar);
+            
 
             // Create sorted list of all bone names
             const boneNames = [];
@@ -124,7 +127,7 @@
     );
 }
 
-function calculateJointAngles(keypoints) {
+function calculateArmAngles(keypoints) {
     // Helper function to get keypoint position
     const getPoint = (name) => {
         const point = keypoints.find(kp => kp.part === name);
@@ -139,46 +142,31 @@ function calculateJointAngles(keypoints) {
         const v2 = new THREE.Vector2(p3.x - p2.x, p3.y - p2.y);
         
         let angle = Math.atan2(v2.y, v2.x) - Math.atan2(v1.y, v1.x);
-        // Normalize angle to [-π, π]
         if (angle > Math.PI) angle -= 2 * Math.PI;
         if (angle < -Math.PI) angle += 2 * Math.PI;
         
         return angle;
     }
 
-    // Get all relevant keypoints
-    const spine = getPoint('nose');
+    // Get arm-related keypoints
     const leftShoulder = getPoint('leftShoulder');
     const rightShoulder = getPoint('rightShoulder');
     const leftElbow = getPoint('leftElbow');
     const rightElbow = getPoint('rightElbow');
     const leftWrist = getPoint('leftWrist');
     const rightWrist = getPoint('rightWrist');
-    const leftHip = getPoint('leftHip');
-    const rightHip = getPoint('rightHip');
-    const leftKnee = getPoint('leftKnee');
-    const rightKnee = getPoint('rightKnee');
-    const leftAnkle = getPoint('leftAnkle');
-    const rightAnkle = getPoint('rightAnkle');
 
-    // Calculate spine angle (overall body tilt)
-    const spineAngle = spine && leftHip ? 
-        Math.atan2(spine.y - leftHip.y, spine.x - leftHip.x) :
-        null;
-
+    // Calculate only shoulder, elbow, and wrist angles
     const angles = {
-        spine: spineAngle,
         leftShoulder: null,
         rightShoulder: null,
         leftElbow: null,
         rightElbow: null,
-        leftHip: null,
-        rightHip: null,
-        leftKnee: null,
-        rightKnee: null
+        leftWrist: null,
+        rightWrist: null
     };
 
-    // Only calculate angles if required points are present
+    // Shoulder angles
     if (leftShoulder && leftElbow) {
         angles.leftShoulder = calculateAngle(
             { x: leftShoulder.x + 50, y: leftShoulder.y },
@@ -195,6 +183,7 @@ function calculateJointAngles(keypoints) {
         );
     }
 
+    // Elbow angles
     if (leftShoulder && leftElbow && leftWrist) {
         angles.leftElbow = calculateAngle(leftShoulder, leftElbow, leftWrist);
     }
@@ -203,40 +192,32 @@ function calculateJointAngles(keypoints) {
         angles.rightElbow = calculateAngle(rightShoulder, rightElbow, rightWrist);
     }
 
-    if (leftHip && leftKnee) {
-        angles.leftHip = calculateAngle(
-            { x: leftHip.x, y: leftHip.y - 50 },
-            leftHip,
-            leftKnee
+    // Wrist (palm) angles
+    if (leftElbow && leftWrist) {
+        angles.leftWrist = calculateAngle(
+            { x: leftElbow.x, y: leftElbow.y },
+            leftElbow,
+            leftWrist
         );
     }
 
-    if (rightHip && rightKnee) {
-        angles.rightHip = calculateAngle(
-            { x: rightHip.x, y: rightHip.y - 50 },
-            rightHip,
-            rightKnee
+    if (rightElbow && rightWrist) {
+        angles.rightWrist = calculateAngle(
+            { x: rightElbow.x, y: rightElbow.y },
+            rightElbow,
+            rightWrist
         );
-    }
-
-    if (leftHip && leftKnee && leftAnkle) {
-        angles.leftKnee = calculateAngle(leftHip, leftKnee, leftAnkle);
-    }
-
-    if (rightHip && rightKnee && rightAnkle) {
-        angles.rightKnee = calculateAngle(rightHip, rightKnee, rightAnkle);
     }
 
     return angles;
 }
 
-function updateAvatarPose(keypoints) {
+function updateAvatarArms(keypoints) {
     if (!avatar) return;
 
-    const angles = calculateJointAngles(keypoints);
+    const angles = calculateArmAngles(keypoints);
     
-    // Helper function to safely update bone rotation
-    function updateBoneRotation(boneName, angle, axis = 'z', multiplier = 1) {
+    function updateBoneRotation(boneName, angle, axis = 'x', multiplier = 1) {
         const bone = avatarBones[boneName];
         if (bone && angle !== null) {
             // Reset rotation to initial state first
@@ -246,13 +227,6 @@ function updateAvatarPose(keypoints) {
             // Apply new rotation
             bone.rotation[axis] += angle * multiplier;
         }
-    }
-
-    // Update spine and upper body
-    if (angles.spine !== null) {
-        updateBoneRotation('Spine', angles.spine, 'z', 0.3);
-        updateBoneRotation('Spine1', angles.spine, 'z', 0.3);
-        updateBoneRotation('Spine2', angles.spine, 'z', 0.3);
     }
 
     // Update shoulders
@@ -267,14 +241,11 @@ function updateAvatarPose(keypoints) {
     updateBoneRotation('LeftForeArm', angles.leftElbow, 'x', 1);
     updateBoneRotation('RightForeArm', angles.rightElbow, 'x', -1);
 
-    // Update legs
-    updateBoneRotation('LeftUpLeg', angles.leftHip, 'x', 1);
-    updateBoneRotation('RightUpLeg', angles.rightHip, 'x', -1);
-
-    // Update knees
-    updateBoneRotation('LeftLeg', angles.leftKnee, 'x', 1);
-    updateBoneRotation('RightLeg', angles.rightKnee, 'x', -1);
+    // Update wrists (palms)
+    updateBoneRotation('LeftHand', angles.leftWrist, 'x', 1);
+    updateBoneRotation('RightHand', angles.rightWrist, 'x', -1);
 }
+
 async function detectPose() {
             const net = await posenet.load();
             const video = await setupCamera();
@@ -336,12 +307,14 @@ async function detectPose() {
                 status.textContent = allKeypointsInside ? 'Correct' : 'Incorrect';
                 status.style.color = allKeypointsInside ? 'green' : 'red';
 
-                updateAvatarPose(pose.keypoints);
+                updateAvatarArms(pose.keypoints);
                 requestAnimationFrame(poseDetectionFrame);
             }
 
             poseDetectionFrame();
         }
+
+
         function onWindowResize() {
             camera.aspect = window.innerWidth / 2 / window.innerHeight;
             camera.updateProjectionMatrix();

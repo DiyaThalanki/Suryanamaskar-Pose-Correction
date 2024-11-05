@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Yoga Studio with Pose Detection in 3D Room</title>
+    <title>Yoga Studio with Avatar Pose Mapping</title>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/posenet"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -27,10 +27,17 @@
     <div id="yoga-studio"></div>
 
     <script>
-        let scene, camera, renderer, controls, model;
-        let avatarGroup, pointMeshes, stickGeometry, stickLines;
+        let scene, camera, renderer, controls;
+        let avatar, avatarSkeleton, avatarBones = {};
+        let studioModel;
 
-        // Pose detection setup
+        // Add quaternion utilities
+        const quatFromEuler = (x, y, z) => {
+            const quat = new THREE.Quaternion();
+            const euler = new THREE.Euler(x, y, z, 'XYZ');
+            return quat.setFromEuler(euler);
+        };
+
         async function setupCamera() {
             const video = document.getElementById('video');
             const stream = await navigator.mediaDevices.getUserMedia({ video: true });
@@ -40,110 +47,173 @@
             });
         }
 
+        
+
         function init3DScene() {
-            // Create scene
             scene = new THREE.Scene();
             scene.background = new THREE.Color(0xcccccc);
 
-            // Create camera
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / 2 / window.innerHeight, 0.1, 1000);
-            camera.position.z = 5;
+            camera.position.set(0, 1, 3);
 
-            // Create renderer
-            renderer = new THREE.WebGLRenderer();
+            renderer = new THREE.WebGLRenderer({ antialias: true });
             renderer.setSize(window.innerWidth / 2, window.innerHeight);
+            renderer.shadowMap.enabled = true;
             document.getElementById('yoga-studio').appendChild(renderer.domElement);
 
-            // Add lights
             const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
             scene.add(ambientLight);
-            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.5);
-            directionalLight.position.set(0, 1, 0);
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(-2, 4, 2);
+            directionalLight.castShadow = true;
             scene.add(directionalLight);
 
-            // Add OrbitControls
             controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.target.set(0, 1, 0);
+            controls.update();
 
-            // Load the GLB model
-            const loader = new THREE.GLTFLoader();
-            loader.load(
-                'studio_room.glb',
-                function (gltf) {
-                    model = gltf.scene;
-                    scene.add(model);
-
-                    // Center the model
-                    const box = new THREE.Box3().setFromObject(model);
-                    const center = box.getCenter(new THREE.Vector3());
-                    model.position.sub(center);
-
-                    // Adjust camera to fit the model
-                    const size = box.getSize(new THREE.Vector3());
-                    const maxDim = Math.max(size.x, size.y, size.z);
-                    const fov = camera.fov * (Math.PI / 180);
-                    let cameraZ = Math.abs(maxDim / 2 / Math.tan(fov / 2));
-                    cameraZ *= 1.5; // Zoom out a little so object fits in view
-                    camera.position.z = cameraZ;
-
-                    // Update camera
-                    camera.updateProjectionMatrix();
-
-                    // Update controls
-                    controls.target.set(0, 0, 0);
-                    controls.update();
-
-                    // Set up avatar after model is loaded
-                    setupAvatar();
-                },
-                function (xhr) {
-                    console.log((xhr.loaded / xhr.total * 100) + '% loaded');
-                },
-                function (error) {
-                    console.error('An error happened', error);
-                }
-            );
-
-            // Handle window resize
+            loadStudioAndAvatar();
+            
             window.addEventListener('resize', onWindowResize, false);
         }
 
-        function setupAvatar() {
-            avatarGroup = new THREE.Group();
-            const pointGeometry = new THREE.SphereGeometry(0.02, 32, 32);
-            const pointMaterial = new THREE.MeshPhongMaterial({ color: 0x00ff00 });
-
-            const keypoints = [
-                'nose', 'leftEye', 'rightEye', 'leftEar', 'rightEar', 'leftShoulder', 'rightShoulder',
-                'leftElbow', 'rightElbow', 'leftWrist', 'rightWrist', 'leftHip', 'rightHip',
-                'leftKnee', 'rightKnee', 'leftAnkle', 'rightAnkle'
-            ];
-
-            pointMeshes = {};
-            keypoints.forEach(point => {
-                const mesh = new THREE.Mesh(pointGeometry, pointMaterial);
-                pointMeshes[point] = mesh;
-                avatarGroup.add(mesh);
-            });
-
-            scene.add(avatarGroup);
-
-            // Create stick figure lines
-            const stickMaterial = new THREE.LineBasicMaterial({ color: 0x00ff00 });
-            stickGeometry = new THREE.BufferGeometry();
-            stickLines = new THREE.LineSegments(stickGeometry, stickMaterial);
-            avatarGroup.add(stickLines);
-
-            // Position avatar in the room
-            // avatarGroup.position.set(0, -1, 0);
-            avatarGroup.position.set(0, 1, 1);
-            avatarGroup.scale.set(2, 2, 2);
+        function loadStudioAndAvatar() {
+            const loader = new THREE.GLTFLoader();
             
+            // Load studio
+            loader.load('studio_room.glb',
+                (gltf) => {
+                    studioModel = gltf.scene;
+                    scene.add(studioModel);
+                    studioModel.traverse((node) => {
+                        if (node.isMesh) {
+                            node.castShadow = true;
+                            node.receiveShadow = true;
+                        }
+                    });
+                    loadAvatar();
+                },
+                undefined,
+                (error) => console.error('Error loading studio:', error)
+            );
         }
 
-        function onWindowResize() {
-            camera.aspect = window.innerWidth / 2 / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth / 2, window.innerHeight);
+        function loadAvatar() {
+            const loader = new THREE.GLTFLoader();
+            loader.load('model.glb',
+                (gltf) => {
+                    avatar = gltf.scene;
+                    avatar.position.set(0, 0, 0);
+                    avatar.scale.set(1, 1, 1);
+                    scene.add(avatar);
+
+                    avatar.traverse((node) => {
+                        if (node.isMesh) {
+                            node.castShadow = true;
+                            node.receiveShadow = true;
+                        }
+                        if (node.isBone) {
+                            avatarBones[node.name] = node;
+                        }
+                        if (node.isSkinnedMesh) {
+                            avatarSkeleton = node.skeleton;
+                        }
+                    });
+
+                    // Store initial bone rotations
+                    Object.values(avatarBones).forEach(bone => {
+                        bone.initialRotation = bone.rotation.clone();
+                    });
+                },
+                undefined,
+                (error) => console.error('Error loading avatar:', error)
+            );
+        }
+
+        function calculateJointRotation(keypoints, joint1, joint2, joint3) {
+            const p1 = keypoints.find(kp => kp.part === joint1);
+            const p2 = keypoints.find(kp => kp.part === joint2);
+            const p3 = keypoints.find(kp => kp.part === joint3);
+
+            if (p1 && p2 && p3 && p1.score > 0.5 && p2.score > 0.5 && p3.score > 0.5) {
+                // Calculate vectors
+                const v1 = new THREE.Vector3(
+                    p2.position.x - p1.position.x,
+                    p2.position.y - p1.position.y,
+                    0
+                );
+                const v2 = new THREE.Vector3(
+                    p3.position.x - p2.position.x,
+                    p3.position.y - p2.position.y,
+                    0
+                );
+
+                // Calculate angle
+                return Math.atan2(v2.y, v2.x) - Math.atan2(v1.y, v1.x);
+            }
+            return null;
+        }
+
+        function updateAvatarPose(keypoints) {
+            if (!avatar || !avatarSkeleton) return;
+
+            // Update arm rotations
+            const leftArmAngle = calculateJointRotation(keypoints, 'leftShoulder', 'leftElbow', 'leftWrist');
+            const rightArmAngle = calculateJointRotation(keypoints, 'rightShoulder', 'rightElbow', 'rightWrist');
+            
+            if (leftArmAngle !== null && avatarBones['leftArm']) {
+                const rotation = quatFromEuler(0, 0, leftArmAngle);
+                avatarBones['leftArm'].quaternion.copy(rotation);
+            }
+
+            if (rightArmAngle !== null && avatarBones['rightArm']) {
+                const rotation = quatFromEuler(0, 0, rightArmAngle);
+                avatarBones['rightArm'].quaternion.copy(rotation);
+            }
+
+            // Update leg rotations
+            const leftLegAngle = calculateJointRotation(keypoints, 'leftHip', 'leftKnee', 'leftAnkle');
+            const rightLegAngle = calculateJointRotation(keypoints, 'rightHip', 'rightKnee', 'rightAnkle');
+
+            if (leftLegAngle !== null && avatarBones['leftLeg']) {
+                const rotation = quatFromEuler(0, 0, leftLegAngle);
+                avatarBones['leftLeg'].quaternion.copy(rotation);
+            }
+
+            if (rightLegAngle !== null && avatarBones['rightLeg']) {
+                const rotation = quatFromEuler(0, 0, rightLegAngle);
+                avatarBones['rightLeg'].quaternion.copy(rotation);
+            }
+
+            // Update spine/torso rotation based on shoulders and hips
+            const torsoKeypoints = keypoints.filter(kp => 
+                ['leftShoulder', 'rightShoulder', 'leftHip', 'rightHip'].includes(kp.part)
+            );
+
+            if (torsoKeypoints.length === 4 && torsoKeypoints.every(kp => kp.score > 0.5)) {
+                const shoulderCenter = {
+                    x: (torsoKeypoints[0].position.x + torsoKeypoints[1].position.x) / 2,
+                    y: (torsoKeypoints[0].position.y + torsoKeypoints[1].position.y) / 2
+                };
+                const hipCenter = {
+                    x: (torsoKeypoints[2].position.x + torsoKeypoints[3].position.x) / 2,
+                    y: (torsoKeypoints[2].position.y + torsoKeypoints[3].position.y) / 2
+                };
+
+                const torsoAngle = Math.atan2(
+                    shoulderCenter.y - hipCenter.y,
+                    shoulderCenter.x - hipCenter.x
+                );
+
+                if (avatarBones['spine']) {
+                    const rotation = quatFromEuler(0, 0, torsoAngle);
+                    avatarBones['spine'].quaternion.copy(rotation);
+                }
+            }
+
+            if (avatarSkeleton) {
+                avatarSkeleton.update();
+            }
         }
 
         async function detectPose() {
@@ -160,14 +230,38 @@
             function drawRectangle() {
                 ctx.strokeStyle = 'blue';
                 ctx.lineWidth = 4;
-                ctx.strokeRect(rect.x, rect.y, rect.width, rect.height);
+                // ctx.strokeRect(rect.x, rect.y, rect.width, rect.height);
+                ctx.beginPath();
+                ctx.moveTo(250,650);
+                ctx.lineTo(500,650);
+                ctx.lineTo(500,300);
+                ctx.lineTo(700,300);
+                ctx.lineTo(700,200);
+                ctx.lineTo(500,200);
+                ctx.lineTo(500,50);
+                ctx.lineTo(250,50);
+                ctx.lineTo(250,200);
+                ctx.lineTo(50,200);
+                ctx.lineTo(50,300);
+                ctx.lineTo(250,300);
+                ctx.lineTo(250,650);
+                ctx.stroke();
             }
 
             function areKeypointsInsideRect(keypoints) {
                 return keypoints.every((keypoint) => {
                     const { x, y } = keypoint.position;
-                    return x >= rect.x && x <= rect.x + rect.width &&
-                           y >= rect.y && y <= rect.y + rect.height;
+                    if (200<=y<=300)
+                {
+                    return x>=50 && x<=700;
+                }
+                else
+                {
+                    return x>=250 && x<=500 && y>=650 && y<=50;
+                }
+
+                    // return x >= rect.x && x <= rect.x + rect.width &&
+                    //        y >= rect.y && y <= rect.y + rect.height;
                 });
             }
 
@@ -183,54 +277,17 @@
                 status.textContent = allKeypointsInside ? 'Correct' : 'Incorrect';
                 status.style.color = allKeypointsInside ? 'green' : 'red';
 
-                updateAvatar(pose.keypoints);
+                updateAvatarPose(pose.keypoints);
                 requestAnimationFrame(poseDetectionFrame);
             }
 
             poseDetectionFrame();
         }
 
-        function updateAvatar(detectedKeypoints) {
-            if (!avatarGroup) return;
-
-            const stickVertices = [];
-            detectedKeypoints.forEach(keypoint => {
-                if (keypoint.score > 0.5 && pointMeshes[keypoint.part]) {
-                    const mesh = pointMeshes[keypoint.part];
-                    let x = (keypoint.position.x / 640) * 2 - 1;
-                    let y = -(keypoint.position.y / 480) * 2 + 1;
-                    x *= 1.5;
-                    y *= 1.5;
-                    mesh.position.set(x, y, 0);
-                }
-            });
-
-            const connections = [
-                ['leftShoulder', 'rightShoulder'],
-                ['leftShoulder', 'leftElbow'],
-                ['leftElbow', 'leftWrist'],
-                ['rightShoulder', 'rightElbow'],
-                ['rightElbow', 'rightWrist'],
-                ['leftShoulder', 'leftHip'],
-                ['rightShoulder', 'rightHip'],
-                ['leftHip', 'leftKnee'],
-                ['leftKnee', 'leftAnkle'],
-                ['rightHip', 'rightKnee'],
-                ['rightKnee', 'rightAnkle'],
-                ['leftHip', 'rightHip']
-            ];
-
-            connections.forEach(([partA, partB]) => {
-                const meshA = pointMeshes[partA];
-                const meshB = pointMeshes[partB];
-                if (meshA && meshB) {
-                    stickVertices.push(meshA.position.x, meshA.position.y, meshA.position.z);
-                    stickVertices.push(meshB.position.x, meshB.position.y, meshB.position.z);
-                }
-            });
-
-            stickGeometry.setAttribute('position', new THREE.Float32BufferAttribute(stickVertices, 3));
-            stickGeometry.attributes.position.needsUpdate = true;
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / 2 / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth / 2, window.innerHeight);
         }
 
         function animate() {

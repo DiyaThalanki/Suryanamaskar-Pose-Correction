@@ -247,40 +247,72 @@ function updateAvatarArms(keypoints) {
 }
 
 async function detectPose() {
-    const net = await posenet.load();
-    const video = await setupCamera();
-    video.play();
+            const net = await posenet.load();
+            const video = await setupCamera();
+            video.play();
 
-    const canvas = document.getElementById('output');
-    const ctx = canvas.getContext('2d');
+            const canvas = document.getElementById('output');
+            const ctx = canvas.getContext('2d');
+            const status = document.getElementById('status');
 
-    async function poseDetectionFrame() {
-        const pose = await net.estimateSinglePose(video, {
-            flipHorizontal: false,
-            decodingMethod: 'single-person'
-        });
+            const rect = { x: 150, y: 100, width: 275, height: 575 };
 
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-        // Draw detected arm pose keypoints
-        pose.keypoints.forEach(keypoint => {
-            if (keypoint.score > 0.5 && 
-                ['leftShoulder', 'rightShoulder', 'leftElbow', 'rightElbow', 'leftWrist', 'rightWrist'].includes(keypoint.part)) {
+            function drawRectangle() {
+                ctx.strokeStyle = 'blue';
+                ctx.lineWidth = 4;
+                // ctx.strokeRect(rect.x, rect.y, rect.width, rect.height);
                 ctx.beginPath();
-                ctx.arc(keypoint.position.x, keypoint.position.y, 5, 0, 2 * Math.PI);
-                ctx.fillStyle = 'red';
-                ctx.fill();
+                ctx.moveTo(250,650);
+                ctx.lineTo(500,650);
+                ctx.lineTo(500,300);
+                ctx.lineTo(700,300);
+                ctx.lineTo(700,200);
+                ctx.lineTo(500,200);
+                ctx.lineTo(500,50);
+                ctx.lineTo(250,50);
+                ctx.lineTo(250,200);
+                ctx.lineTo(50,200);
+                ctx.lineTo(50,300);
+                ctx.lineTo(250,300);
+                ctx.lineTo(250,650);
+                ctx.stroke();
             }
-        });
 
-        updateAvatarArms(pose.keypoints);
-        requestAnimationFrame(poseDetectionFrame);
-    }
+            function areKeypointsInsideRect(keypoints) {
+                return keypoints.every((keypoint) => {
+                    const { x, y } = keypoint.position;
+                    if (200<=y<=300)
+                {
+                    return x>=50 && x<=700;
+                }
+                else
+                {
+                    return x>=250 && x<=500 && y>=650 && y<=50;
+                }
 
-    poseDetectionFrame();
-}
+                    // return x >= rect.x && x <= rect.x + rect.width &&
+                    //        y >= rect.y && y <= rect.y + rect.height;
+                });
+            }
 
+            async function poseDetectionFrame() {
+                const pose = await net.estimateSinglePose(video, { flipHorizontal: false });
+
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+                drawRectangle();
+
+                const allKeypointsInside = areKeypointsInsideRect(pose.keypoints);
+                status.textContent = allKeypointsInside ? 'Correct' : 'Incorrect';
+                status.style.color = allKeypointsInside ? 'green' : 'red';
+
+                updateAvatarArms(pose.keypoints);
+                requestAnimationFrame(poseDetectionFrame);
+            }
+
+            poseDetectionFrame();
+        }
 
         function onWindowResize() {
             camera.aspect = window.innerWidth / 2 / window.innerHeight;

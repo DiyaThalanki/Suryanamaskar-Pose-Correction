@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Pranamasana Pose Detection</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 20px;
+    }
+    
+    #pose-info {
+      margin-top: 20px;
+      padding: 10px;
+      background-color: #f4f4f4;
+      border: 1px solid #ddd;
+    }
+    
+    .accuracy-bar {
+      width: 100%;
+      height: 20px;
+      background-color: #ccc;
+      margin-top: 10px;
+    }
+    
+    .accuracy-bar-fill {
+      height: 100%;
+      background-color: black;
+      transition: width 0.5s ease;
+    }
+
+    #modal {
+      display: none;
+      position: fixed;
+      z-index: 1000;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0,0,0,0.5);
+    }
+    .modal-content {
+      background-color: white;
+      margin: 15% auto;
+      padding: 20px;
+      border-radius: 10px;
+      width: 300px;
+      text-align: center;
+    }
+    #timer {
+      font-size: 24px;
+      margin-top: 10px;
+      color: #333;
+    }
+  </style>
+</head>
+<body>
+  <div id="modal">
+    <div class="modal-content">
+      <h2>Good Job!</h2>
+      <p>Would you like to move to the next asana?</p>
+      <button onclick="goToNextAsana()">Yes</button>
+      <button onclick="closeModal()">Practice More</button>
+    </div>
+  </div>
+
+  <div id="pose-detection">
+    <video id="videoElement" width="640" height="480" autoplay></video>
+    <canvas id="poseCanvas" width="640" height="480"></canvas>
+  </div>
+
+  <div id="timer">Hold Pose: 0 / 2 seconds</div>
+
+  <div id="pose-info">
+    <h2>Pranamasana (Prayer Pose) Feedback</h2>
+    <div style="display: flex; justify-content: space-between;">
+      <div>
+        <p>Left Arm Accuracy: <span id="leftArmAccuracy">-</span>%</p>
+        <div class="accuracy-bar">
+          <div id="leftArmAccuracyBar" class="accuracy-bar-fill"></div>
+        </div>
+      </div>
+      <div>
+        <p>Right Arm Accuracy: <span id="rightArmAccuracy">-</span>%</p>
+        <div class="accuracy-bar">
+          <div id="rightArmAccuracyBar" class="accuracy-bar-fill"></div>
+        </div>
+      </div>
+      <div>
+        <p>Wrist Proximity: <span id="wristProximity">-</span></p>
+        <p>Overall Pose Accuracy: <span id="overallAccuracy">-</span>%</p>
+        <div class="accuracy-bar">
+          <div id="overallAccuracyBar" class="accuracy-bar-fill"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@2.8.6"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/posenet@2.2.2"></script>
+  <script>
+    const video = document.getElementById('videoElement');
+    const canvas = document.getElementById('poseCanvas');
+    const ctx = canvas.getContext('2d');
+    const timer = document.getElementById('timer');
+    
+    let poseHoldStartTime = null;
+    let poseHoldDuration = 2; // 5 seconds hold
+    
+    // Angle thresholds for Pranamasana
+    const shoulderElbowHipAngleThreshold = {
+      min: 70,
+      max: 150
+    };
+    const elbowShoulderWristAngleThreshold = {
+      min: 30,
+      max: 90
+    };
+    const wristProximityThreshold = 50; // Pixels
+
+    async function detectPose() {
+      const net = await posenet.load();
+      
+      navigator.mediaDevices.getUserMedia({ video: true, audio: false })
+        .then((stream) => {
+          video.srcObject = stream;
+          video.onloadedmetadata = () => {
+            video.play();
+            updatePose(net);
+          };
+        })
+        .catch((err) => {
+          console.error('Error accessing webcam:', err);
+        });
+    }
+
+    async function updatePose(net) {
+      const pose = await net.estimateSinglePose(video, {
+        flipHorizontal: true
+      });
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      // Calculate arm angles for Pranamasana
+      const leftShoulder = pose.keypoints[5];
+      const leftElbow = pose.keypoints[7];
+      const leftWrist = pose.keypoints[9];
+      const leftHip = pose.keypoints[11];
+      const leftArmAccuracy = calculateLeftArmAccuracy(leftShoulder, leftElbow, leftWrist, leftHip);
+
+      const rightShoulder = pose.keypoints[6];
+      const rightElbow = pose.keypoints[8];
+      const rightWrist = pose.keypoints[10];
+      const rightHip = pose.keypoints[12];
+      const rightArmAccuracy = calculateRightArmAccuracy(rightShoulder, rightElbow, rightWrist, rightHip);
+
+      // Check wrist proximity
+      const wristProximity = calculateWristProximity(leftWrist, rightWrist);
+      const wristProximityStatus = wristProximity <= wristProximityThreshold ? 'Near' : 'Not Near';
+
+      // Calculate overall pose accuracy
+      const overallAccuracy = Math.max(0, Math.min(100, Math.round((leftArmAccuracy * 0.5 + rightArmAccuracy * 0.5))));
+
+      // Update pose information
+      document.getElementById('leftArmAccuracy').textContent = leftArmAccuracy.toFixed(2);
+      document.getElementById('leftArmAccuracyBar').style.width = `${leftArmAccuracy}%`;
+
+      document.getElementById('rightArmAccuracy').textContent = rightArmAccuracy.toFixed(2);
+      document.getElementById('rightArmAccuracyBar').style.width = `${rightArmAccuracy}%`;
+
+      document.getElementById('wristProximity').textContent = wristProximityStatus;
+      document.getElementById('overallAccuracy').textContent = overallAccuracy + '%';
+      document.getElementById('overallAccuracyBar').style.width = `${overallAccuracy}%`;
+
+      checkPoseAccuracy(overallAccuracy);
+      requestAnimationFrame(() => updatePose(net));
+    }
+
+    function calculateLeftArmAccuracy(shoulder, elbow, wrist, hip) {
+      const shoulderElbowHipAngle = calculateAngle(shoulder, elbow, hip);
+      const elbowShoulderWristAngle = calculateAngle(elbow, shoulder, wrist);
+      const leftArmAccuracy = getAccuracyPercentage(
+        shoulderElbowHipAngle,
+        shoulderElbowHipAngleThreshold.min,
+        shoulderElbowHipAngleThreshold.max
+      ) *
+      getAccuracyPercentage(
+        elbowShoulderWristAngle,
+        elbowShoulderWristAngleThreshold.min,
+        elbowShoulderWristAngleThreshold.max
+      );
+      return leftArmAccuracy * 100;
+    }
+
+    function calculateRightArmAccuracy(shoulder, elbow, wrist, hip) {
+      const shoulderElbowHipAngle = calculateAngle(shoulder, elbow, hip);
+      const elbowShoulderWristAngle = calculateAngle(elbow, shoulder, wrist);
+      const rightArmAccuracy = getAccuracyPercentage(
+        shoulderElbowHipAngle,
+        shoulderElbowHipAngleThreshold.min,
+        shoulderElbowHipAngleThreshold.max
+      ) *
+      getAccuracyPercentage(
+        elbowShoulderWristAngle,
+        elbowShoulderWristAngleThreshold.min,
+        elbowShoulderWristAngleThreshold.max
+      );
+      return rightArmAccuracy * 100;
+    }
+
+    function calculateWristProximity(leftWrist, rightWrist) {
+      const dx = leftWrist.position.x - rightWrist.position.x;
+      const dy = leftWrist.position.y - rightWrist.position.y;
+      return Math.sqrt(dx * dx + dy * dy);
+    }
+
+    function calculateAngle(p1, p2, p3) {
+      // Calculate the vectors
+      const v1 = { x: p1.position.x - p2.position.x, y: p1.position.y - p2.position.y };
+      const v2 = { x: p3.position.x - p2.position.x, y: p3.position.y - p2.position.y };
+
+      // Calculate the angle between the vectors
+      const dot = v1.x * v2.x + v1.y * v2.y;
+      const mag1 = Math.sqrt(v1.x * v1.x + v1.y * v1.y);
+      const mag2 = Math.sqrt(v2.x * v2.x + v2.y * v2.y);
+      const angle = Math.acos(dot / (mag1 * mag2)) * (180 / Math.PI);
+      return angle;
+    }
+
+    function getAccuracyPercentage(value, min, max) {
+      if (value >= min && value <= max) {
+        return 1;
+      } else if (value < min) {
+        return Math.max(0, value / min);
+      } else {
+        return Math.max(0, (max - value) / (max - min));
+      }
+    }
+
+    function checkPoseAccuracy(accuracy) {
+      if (accuracy >= 70) {
+        if (poseHoldStartTime === null) {
+          poseHoldStartTime = Date.now();
+        }
+
+        const elapsedTime = (Date.now() - poseHoldStartTime) / 1000;
+        timer.textContent = `Hold Pose: ${Math.min(elapsedTime.toFixed(1), poseHoldDuration)} / ${poseHoldDuration} seconds`;
+
+        if (elapsedTime >= poseHoldDuration) {
+          document.getElementById('modal').style.display = 'block';
+          poseHoldStartTime = null;
+        }
+      } else {
+        poseHoldStartTime = null;
+        timer.textContent = `Hold Pose: 0 / ${poseHoldDuration} seconds`;
+      }
+    }
+
+    function goToNextAsana() {
+      window.location.href = 'hastapadasna_og.html';
+    }
+
+    function closeModal() {
+      document.getElementById('modal').style.display = 'none';
+    }
+
+    detectPose();
+  </script>
+</body>
+</html>

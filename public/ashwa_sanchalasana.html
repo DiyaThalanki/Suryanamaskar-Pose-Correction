@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Pose Detection - Ashwa Sanchalasana</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 20px;
+    }
+    
+    #pose-info {
+      margin-top: 20px;
+      padding: 10px;
+      background-color: #f4f4f4;
+      border: 1px solid #ddd;
+    }
+    
+    .accuracy-bar {
+      width: 100%;
+      height: 20px;
+      background-color: #ccc;
+      margin-top: 10px;
+    }
+    
+    .accuracy-bar-fill {
+      height: 100%;
+      background-color: black;
+      transition: width 0.5s ease;
+    }
+
+    #modal {
+      display: none;
+      position: fixed;
+      z-index: 1000;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0,0,0,0.5);
+    }
+
+    .modal-content {
+      background-color: white;
+      margin: 15% auto;
+      padding: 20px;
+      border-radius: 10px;
+      width: 300px;
+      text-align: center;
+    }
+
+    #timer {
+      font-size: 24px;
+      margin-top: 10px;
+      color: #333;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div id="modal">
+    <div class="modal-content">
+      <h2>Good Job!</h2>
+      <p>Would you like to move to the next asana?</p>
+      <button onclick="goToNextAsana()">Yes</button>
+      <button onclick="closeModal()">Practice More</button>
+    </div>
+  </div>
+
+  <h1>Pose Detection - Ashwa Sanchalasana</h1>
+  
+  <div id="pose-detection">
+    <video id="videoElement" width="640" height="480" autoplay></video>
+    <canvas id="poseCanvas" width="640" height="480"></canvas>
+  </div>
+
+  <div id="timer">Hold Pose: 0 / 2 seconds</div>
+  
+  <div id="pose-info">
+    <h2>Ashwa-Sanchalasna Feedback</h2>
+    <div style="display: flex; justify-content: space-between;">
+      <div>
+        <p>Left Leg Accuracy: <span id="leftLeg">-</span>%</p>
+        <div class="accuracy-bar">
+          <div id="leftLegBar" class="accuracy-bar-fill"></div>
+        </div>
+      </div>
+      <div>
+        <p>Torso Accuracy: <span id="torso">-</span>%</p>
+        <div class="accuracy-bar">
+          <div id="torsoBar" class="accuracy-bar-fill"></div>
+        </div>
+      </div>
+      <div>
+        <p>Left Arm Accuracy: <span id="rightArmAccuracy">-</span>%</p>
+        <div class="accuracy-bar">
+          <div id="rightArmAccuracyBar" class="accuracy-bar-fill"></div>
+        </div>
+      </div>
+      <div>
+        <p>Right Leg Accuracy: <span id="rightLeg">-</span>%</p>
+        <div class="accuracy-bar">
+          <div id="rightLegBar" class="accuracy-bar-fill"></div>
+        </div>
+      </div>
+      <div>
+        <p>Overall Pose Accuracy: <span id="overallAccuracy">-</span>%</p>
+        <div class="accuracy-bar">
+          <div id="overallAccuracyBar" class="accuracy-bar-fill"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@2.8.6"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/posenet@2.2.2"></script>
+  <script>
+    const video = document.getElementById('videoElement');
+    const canvas = document.getElementById('poseCanvas');
+    const ctx = canvas.getContext('2d');
+    const timer = document.getElementById('timer');
+    
+    let poseHoldStartTime = null;
+    let poseHoldDuration = 2; // 2 seconds hold
+
+    async function detectPose() {
+      const net = await posenet.load();
+      
+      navigator.mediaDevices.getUserMedia({ video: true, audio: false })
+        .then((stream) => {
+          video.srcObject = stream;
+          video.onloadedmetadata = () => {
+            video.play();
+            updatePose(net);
+          };
+        })
+        .catch((err) => {
+          console.error('Error accessing webcam:', err);
+        });
+    }
+
+    async function updatePose(net) {
+      const pose = await net.estimateSinglePose(video, {
+        flipHorizontal: true
+      });
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      
+
+      // Get keypoints
+      const leftAnkle = pose.keypoints[15];
+      const leftKnee = pose.keypoints[13];
+      const leftShoulder = pose.keypoints[5];
+      const leftElbow = pose.keypoints[7];
+      const leftWrist = pose.keypoints[9];
+      const leftHip = pose.keypoints[11];
+
+      const rightAnkle = pose.keypoints[16];
+      const rightKnee = pose.keypoints[14];
+      const rightHip = pose.keypoints[12];
+
+      // Calculate accuracies
+      const staightnessLeftLeg = calculateLeftLegAccuracy(leftAnkle, leftKnee, leftHip);
+      const straightnessTorse = calculateTorseAccuracy(leftKnee, leftHip, leftShoulder);
+      const staightnessLeftArm = calculateLeftStraightArmAccuracy(leftShoulder, leftElbow, leftWrist);
+      const torsoLeftArmAngle = calculateTorsoArmAccuracy(leftHip, leftShoulder, leftElbow);
+      const rightHipKneeAngle = calculateRightHipKneeAccuracy(rightHip, rightKnee, rightAnkle);
+
+      // Calculate overall pose accuracy
+      const overallAccuracy = Math.max(0, Math.min(100, Math.round((staightnessLeftLeg * 0.2 + straightnessTorse * 0.2 + staightnessLeftArm * 0.2 + torsoLeftArmAngle * 0.2 + rightHipKneeAngle * 0.2))));
+
+      // Update pose information
+      document.getElementById('leftLeg').textContent = staightnessLeftLeg.toFixed(2);
+      document.getElementById('leftLegBar').style.width = `${staightnessLeftLeg}%`;
+
+      document.getElementById('torso').textContent = straightnessTorse.toFixed(2);
+      document.getElementById('torsoBar').style.width = `${straightnessTorse}%`;
+
+      document.getElementById('rightArmAccuracy').textContent = staightnessLeftArm.toFixed(2);
+      document.getElementById('rightArmAccuracyBar').style.width = `${staightnessLeftArm}%`;
+
+      document.getElementById('rightLeg').textContent = rightHipKneeAngle.toFixed(2);
+      document.getElementById('rightLegBar').style.width = `${rightHipKneeAngle}%`;
+
+      document.getElementById('overallAccuracy').textContent = overallAccuracy + '%';
+      document.getElementById('overallAccuracyBar').style.width = `${overallAccuracy}%`;
+
+      checkPoseAccuracy(overallAccuracy);
+      requestAnimationFrame(() => updatePose(net));
+    }
+
+    function calculateLeftLegAccuracy(ankle, knee, hip) {
+      const leftLegAngle = calculateAngle(ankle, knee, hip);
+      const leftLegAccuracy = getAccuracyPercentage(leftLegAngle, 140, 210);
+      return leftLegAccuracy * 100;
+    }
+
+    function calculateTorseAccuracy(knee, hip, shoulder) {
+      const leftLegAngle = calculateAngle(knee, hip, shoulder);
+      const leftLegAccuracy = getAccuracyPercentage(leftLegAngle, 80, 160);
+      return leftLegAccuracy * 100;
+    }
+
+    function calculateLeftStraightArmAccuracy(shoulder, elbow, wrist) {
+      const leftLegAngle = calculateAngle(shoulder, elbow, wrist);
+      const leftLegAccuracy = getAccuracyPercentage(leftLegAngle, 140, 210);
+      return leftLegAccuracy * 100;
+    }
+
+    function calculateTorsoArmAccuracy(hip, shoulder, elbow) {
+      const leftLegAngle = calculateAngle(hip, shoulder, elbow);
+      const leftLegAccuracy = getAccuracyPercentage(leftLegAngle, 70, 100);
+      return leftLegAccuracy * 100;
+    }
+
+    function calculateRightHipKneeAccuracy(hip, knee, ankle) {
+      const leftLegAngle = calculateAngle(hip, knee, ankle);
+      const leftLegAccuracy = getAccuracyPercentage(leftLegAngle, 60, 120);
+      return leftLegAccuracy * 100;
+    }
+
+    function calculateAngle(p1, p2, p3) {
+      const v1 = { x: p1.position.x - p2.position.x, y: p1.position.y - p2.position.y };
+      const v2 = { x: p3.position.x - p2.position.x, y: p3.position.y - p2.position.y };
+      const dot = v1.x * v2.x + v1.y * v2.y;
+      const mag1 = Math.sqrt(v1.x * v1.x + v1.y * v1.y);
+      const mag2 = Math.sqrt(v2.x * v2.x + v2.y * v2.y);
+      const angle = Math.acos(dot / (mag1 * mag2)) * (180 / Math.PI);
+      return angle;
+    }
+
+    function getAccuracyPercentage(value, min, max) {
+      if (value >= min && value <= max) {
+        return 1;
+      } else if (value < min) {
+        return Math.max(0, value / min);
+      } else {
+        return Math.max(0, (max - value) / (max - min));
+      }
+    }
+
+    function checkPoseAccuracy(accuracy) {
+      if (accuracy >= 70) {
+        if (poseHoldStartTime === null) {
+          poseHoldStartTime = Date.now();
+        }
+
+        const elapsedTime = (Date.now() - poseHoldStartTime) / 1000;
+        timer.textContent = `Hold Pose: ${Math.min(elapsedTime.toFixed(1), poseHoldDuration)} / ${poseHoldDuration} seconds`;
+
+        if (elapsedTime >= poseHoldDuration) {
+          document.getElementById('modal').style.display = 'block';
+          poseHoldStartTime = null;
+        }
+      } else {
+        poseHoldStartTime = null;
+        timer.textContent = `Hold Pose: 0 / ${poseHoldDuration} seconds`;
+      }
+    }
+
+    function goToNextAsana() {
+      window.location.href = 'parvatasana.html'; // Replace with your next pose page
+    }
+
+    function closeModal() {
+      document.getElementById('modal').style.display = 'none';
+    }
+
+    detectPose();
+  </script>
+</body>
+</html>

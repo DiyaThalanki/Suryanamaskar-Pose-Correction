@@ -40,12 +40,10 @@ Follow these steps to set up and run the project:
 1. **Clone the Repository**:  
    ```bash  
    git clone <repository_url>  
-   cd Suryanamaskar-Pose-Correction ```
-2. **Start a Python Server**:
-  Use Python's built-in HTTP server to host the project:
-  ```bash
-  Copy code
-  python -m http.server 8000 ```
-3. **Access the Application**:
-Open your browser and navigate to: http://localhost:8000
-Open index.html to begin using the application.
+   cd Suryanamaskar-Pose-Correction 
+2. **Start a Python Server**:  
+   ```bash  
+   python -m http.server 8000
+3. **Access the Application**:  
+   Open your browser and navigate to: http://localhost:8000
+   Open index.html to begin using the application.

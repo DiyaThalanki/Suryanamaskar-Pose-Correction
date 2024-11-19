@@ -72,8 +72,9 @@
   <div id="modal">
     <div class="modal-content">
       <h2>Good Job!</h2>
-      <p>Congratulations on completing the available asanas!</p>
-      <button onclick="goToStart()">Back to Start</button>
+      <p>Would you like to move to the next asana?</p>
+      <button onclick="goToNextAsana()">Yes</button>
+      <button onclick="closeModal()">Practice More</button>
     </div>
   </div>
 
@@ -230,7 +231,7 @@
       }
     }
 
-    function goToStart() {
+    function goToNextAsana() {
       window.location.href = 'hastauttanasana.html';
     }
 

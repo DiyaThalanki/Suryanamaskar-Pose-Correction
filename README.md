@@ -14,3 +14,12 @@ Three.js: For creating and displaying 3D models in a web environment.
 Blender: For modeling and exporting accurate Surya Namaskar poses.
 JavaScript: Core scripting language for application logic.
 HTML/CSS: For structuring and styling the user interface.
+
+Asanas:
+1) Pranamasana
+2) Hasta Utthanasana
+3) Hasta padasana
+4) Ashwa Sanchalasana
+5) Parvatasana
+6) Bhujangasana
+

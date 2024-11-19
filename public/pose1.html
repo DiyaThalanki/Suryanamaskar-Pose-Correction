@@ -3,202 +3,34 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Yoga Studio with Avatar and Pose Analysis</title>
+    <title>Yoga Studio with Avatar Pose Mapping</title>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
     <style>
-        body { 
-            margin: 0; 
-            height: 100vh;
-            display: flex;
-            flex-direction: column;
-        }
-        .main-container {
-            display: flex;
-            flex: 1;
-        }
-        .left-section {
-            width: 50%;
-            position: relative;
-        }
-        .right-section {
-            width: 50%;
-            position: relative;
-        }
-        #yoga-studio {
-            width: 100%;
-            height: 100%;
-        }
-        canvas { 
-            display: block; 
-        }
-        .metrics-section {
-            position: fixed;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            background-color: white;
-            padding: 10px 20px; /* Reduced padding */
-            box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
-            height: 180px; /* Reduced height */
-            overflow-y: auto; /* In case content overflows */
-        }
-        
-        .accuracy-container {
-            width: 30%;
-            text-align: center;
-            font-size: 14px; /* Reduced font size */
-        }
-        
-        .accuracy-bar {
-            width: 100%;
-            height: 10px; /* Reduced height */
-            margin-top: 5px;
-        }
-        
-        .accuracy-bar-fill {
-            height: 100%;
-            background-color: #4CAF50;
-            transition: width 0.5s ease;
-            border-radius: 10px;
-        }
-        #pose-info {
-            padding: 10px;
-            background-color: #f4f4f4;
-            border: 1px solid #ddd;
-            box-sizing: border-box;
-        }
-        .accuracy-row {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-top: 10px;
-        }
-        .accuracy-container {
-            width: 30%;
-            text-align: center;
-        }
-        .accuracy-bar {
-            width: 100%;
-            height: 15px;
-            background-color: #ccc;
-            margin-top: 5px;
-            border-radius: 10px;
-        }
-        .accuracy-bar-fill {
-            height: 100%;
-            background-color: #4CAF50;
-            transition: width 0.5s ease;
-            border-radius: 10px;
-        }
-        #timer {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            font-size: 24px;
-            font-weight: bold;
-            color: #333;
-            background-color: rgba(255, 255, 255, 0.8);
-            padding: 10px;
-            border-radius: 5px;
-        }
-        #modal {
-            display: none;
-            position: fixed;
-            z-index: 1000;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0,0,0,0.5);
-        }
-        .modal-content {
-            background-color: white;
-            margin: 15% auto;
-            padding: 20px;
-            border-radius: 10px;
-            width: 300px;
-            text-align: center;
-        }
-        .metrics-section {
-  display: none;
-}
-#timer {
-  display: none;
-}
-
+        body { margin: 0; display: flex; }
+        canvas { display: block; }
+        #pose-detection { width: 50%; position: relative; }
+        #yoga-studio { width: 50%; }
+        #status { position: absolute; top: 10px; left: 10px; font-size: 24px; font-weight: bold; }
     </style>
 </head>
 <body>
-    <div class="main-container">
-        <div class="left-section">
-            <video id="video" width="640" height="480" autoplay style="display: none;"></video>
-            <canvas id="output" width="640" height="480"></canvas>
-            <div id="timer">Hold Pose: 0 / 3 seconds</div>
-        </div>
-        
-        <div class="right-section">
-            <div id="yoga-studio"></div>
-        </div>
+    <div id="pose-detection">
+        <video id="video" width="720" height="700" autoplay style="display: none;"></video>
+        <canvas id="output" width="720" height="700"></canvas>
+        <div id="status"></div>
     </div>
+    <div id="yoga-studio"></div>
 
-    <div class="metrics-section">
-        <div id="pose-info">
-            <h2>Hasta Padasana (Standing Forward Bend) Feedback</h2>
-            <div class="accuracy-row">
-                <div class="accuracy-container">
-                    <h3>Leg Straightness</h3>
-                    <p>Left Leg Angle: <span id="leftLegAngle">-</span>°</p>
-                    <p>Right Leg Angle: <span id="rightLegAngle">-</span>°</p>
-                    <h3>Accuracy: <span id="legStraightnessAccuracy">-</span>%</h3>
-                    <div class="accuracy-bar">
-                        <div id="legStraightnessBar" class="accuracy-bar-fill"></div>
-                    </div>
-                </div>
-
-                <div class="accuracy-container">
-                    <h3>Forward Bend</h3>
-                    <p>Bend Angle: <span id="bendAngle">-</span>°</p>
-                    <h3>Accuracy: <span id="bendAccuracy">-</span>%</h3>
-                    <div class="accuracy-bar">
-                        <div id="bendAccuracyBar" class="accuracy-bar-fill"></div>
-                    </div>
-                </div>
-
-                <div class="accuracy-container">
-                    <h3>Overall Accuracy</h3>
-                    <h3><span id="overallAccuracy">-</span>%</h3>
-                    <div class="accuracy-bar">
-                        <div id="overallAccuracyBar" class="accuracy-bar-fill"></div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div id="modal">
-        <div class="modal-content">
-            <h2>Good Job!</h2>
-            <p>Congratulations on completing the pose!</p>
-            <button onclick="goToStart()">Back to Start</button>
-        </div>
-    </div>
     <script>
-        // [Previous 3D scene setup code remains the same]
+        // [Previous code for init3DScene, loadStudioAndAvatar, updateAvatarArms, updateAvatarLegs, etc. remains the same]
         let scene, camera, renderer, controls;
         let avatar, avatarSkeleton, avatarBones = {};
         let studioModel;
-        let poseHoldStartTime = null;
-        const poseHoldDuration = 3;
-        const legAngleMin = 320;
-        const legAngleMax = 360;
-        const forwardBendMax = 120;
 
-        // [Keep all your previous functions: init3DScene, loadStudioAndAvatar, updateAvatarArms, 
-        // updateAvatarLegs, calculateArmAngles, calculateLegAngles, etc.]
         async function setupCamera() {
             const video = document.getElementById('video');
             const stream = await navigator.mediaDevices.getUserMedia({ video: true });
@@ -324,10 +156,10 @@ function calculateLegAngles(keypoints) {
     // Get leg-related keypoints
     const leftHip = getPoint('leftHip');
     const rightHip = getPoint('rightHip');
-    const leftKnee= getPoint('leftElbow');
-    const rightKnee = getPoint('rightElbow');
-    const leftAnkle = getPoint('leftShoulder');
-    const rightAnkle = getPoint('rightShoulder');
+    const leftKnee = getPoint('leftKnee');
+    const rightKnee = getPoint('rightKnee');
+    const leftAnkle = getPoint('leftAnkle');
+    const rightAnkle = getPoint('rightAnkle');
 
     // Calculate only hip, knee, and ankle angles
     const angles = {
@@ -581,7 +413,7 @@ function updateAvatarHead(keypoints) {
         const neutralRotationY = 0;
         
         // Apply rotations with increased responsiveness for vertical movement
-        const dampingFactorX = 0.5; // Increased for more responsive up/down
+        const dampingFactorX = 0.7; // Increased for more responsive up/down
         const dampingFactorY = 0.3; // Keep side-to-side the same
         
         // Calculate new rotations with separate damping factors
@@ -594,7 +426,7 @@ function updateAvatarHead(keypoints) {
         const maxRotationY = Math.PI / 3;
         
         // Clamp rotations with adjusted vertical limits
-        headBone.rotation.x = Math.max(Math.min(headBone.rotation.x, maxRotationX), -maxRotationX + neutralRotationX);
+        headBone.rotation.x = -Math.max(Math.min(headBone.rotation.x, maxRotationX), -maxRotationX + neutralRotationX);
         headBone.rotation.y = Math.max(Math.min(headBone.rotation.y, maxRotationY), -maxRotationY);
         headBone.rotation.z = Math.max(Math.min(headBone.rotation.z, maxRotationY/2), -maxRotationY/2);
         
@@ -609,7 +441,6 @@ function updateAvatarHead(keypoints) {
         }
     }
 }
-
         async function detectPose() {
             const pose = new Pose({
                 locateFile: (file) => {
@@ -638,6 +469,7 @@ function updateAvatarHead(keypoints) {
 
                 if (results.poseLandmarks) {
                     const keypoints = results.poseLandmarks.map((landmark, index) => {
+                        // Map MediaPipe landmarks to PoseNet-like format
                         const posenetPartMap = {
                             0: 'nose', 
                             11: 'leftShoulder', 
@@ -664,48 +496,19 @@ function updateAvatarHead(keypoints) {
                         };
                     }).filter(kp => kp.part !== '');
 
-                    // Update avatar movements
-                    updateAvatarArms(keypoints);
-                    updateAvatarLegs(keypoints);
-                    updateAvatarHead(keypoints);
-
-                    // Calculate pose accuracy
-                    const leftLegAngle = calculateAngle(
-                        keypoints.find(kp => kp.part === 'leftHip')?.position,
-                        keypoints.find(kp => kp.part === 'leftAnkle')?.position,
-                        keypoints.find(kp => kp.part === 'leftKnee')?.position
-                        
-                    );
-                    const rightLegAngle = calculateAngle(
-                        keypoints.find(kp => kp.part === 'rightHip')?.position,
-                        keypoints.find(kp => kp.part === 'rightAnkle')?.position,
-                        keypoints.find(kp => kp.part === 'rightKnee')?.position
-                        
-                    );
-                    const bendAngle = calculateAngle(
-                        keypoints.find(kp => kp.part === 'leftShoulder')?.position,
-                        keypoints.find(kp => kp.part === 'leftHip')?.position,
-                        keypoints.find(kp => kp.part === 'leftAnkle')?.position
-                    );
-
-                    const legStraightnessAccuracy = ((leftLegAngle >= legAngleMin && leftLegAngle <= legAngleMax) || 
-                        (rightLegAngle >= legAngleMin && rightLegAngle <= legAngleMax)) ? 100 : 0;
-                    const bendAccuracy = bendAngle < forwardBendMax ? 100 : 0;
-                    const overallAccuracy = (legStraightnessAccuracy * 0.5 + bendAccuracy * 0.5).toFixed(2);
-
-                    // Update UI with accuracy information
-                    updatePoseInfo(leftLegAngle, rightLegAngle, bendAngle, legStraightnessAccuracy, bendAccuracy, overallAccuracy);
-                    checkPoseAccuracy(parseFloat(overallAccuracy));
-
                     // Draw keypoints
                     keypoints.forEach(keypoint => {
-                        if (keypoint.score > 0.9) {
+                        if (keypoint.score > 0.9 && 
+                            ['leftShoulder', 'rightShoulder', 'leftElbow', 'rightElbow', 'leftWrist', 'rightWrist', 'nose', 'leftHip', 'rightHip', 'leftKnee', 'rightKnee', 'leftAnkle', 'rightAnkle'].includes(keypoint.part)) {
                             ctx.beginPath();
                             ctx.arc(keypoint.position.x, keypoint.position.y, 5, 0, 2 * Math.PI);
                             ctx.fillStyle = 'red';
                             ctx.fill();
                         }
                     });
+
+                    updateAvatarArms(keypoints);
+                    updateAvatarLegs(keypoints);
                 }
             });
 
@@ -713,70 +516,10 @@ function updateAvatarHead(keypoints) {
                 onFrame: async () => {
                     await pose.send({image: video});
                 },
-                width: canvas.width,
-                height: canvas.height
+                width: video.videoWidth,
+                height: video.videoHeight
             });
             camera.start();
-        }
-
-        function calculateAngle(p1, p2, p3) {
-            if (!p1 || !p2 || !p3) return 0;
-            
-            const vectors = {
-                a: { x: p1.x - p2.x, y: p1.y - p2.y },
-                b: { x: p3.x - p2.x, y: p3.y - p2.y }
-            };
-            
-            const angleRad = Math.atan2(vectors.b.y, vectors.b.x) - Math.atan2(vectors.a.y, vectors.a.x);
-            let angleDeg = angleRad * (180 / Math.PI);
-            
-            if (angleDeg < 0) {
-                angleDeg += 360;
-            }
-            
-            return angleDeg;
-        }
-
-        function updatePoseInfo(leftLegAngle, rightLegAngle, bendAngle, legStraightnessAccuracy, bendAccuracy, overallAccuracy) {
-            document.getElementById('leftLegAngle').textContent = leftLegAngle?.toFixed(2) || '-';
-            document.getElementById('rightLegAngle').textContent = rightLegAngle?.toFixed(2) || '-';
-            document.getElementById('bendAngle').textContent = bendAngle?.toFixed(2) || '-';
-            document.getElementById('legStraightnessAccuracy').textContent = legStraightnessAccuracy + '%';
-            document.getElementById('bendAccuracy').textContent = bendAccuracy + '%';
-            document.getElementById('overallAccuracy').textContent = overallAccuracy + '%';
-
-            document.getElementById('legStraightnessBar').style.width = `${legStraightnessAccuracy}%`;
-            document.getElementById('bendAccuracyBar').style.width = `${bendAccuracy}%`;
-            document.getElementById('overallAccuracyBar').style.width = `${overallAccuracy}%`;
-        }
-
-        function checkPoseAccuracy(accuracy) {
-            if (accuracy >= 70) {
-                if (poseHoldStartTime === null) {
-                    poseHoldStartTime = Date.now();
-                }
-
-                const elapsedTime = (Date.now() - poseHoldStartTime) / 1000;
-                document.getElementById('timer').textContent = 
-                    `Hold Pose: ${Math.min(elapsedTime.toFixed(1), poseHoldDuration)} / ${poseHoldDuration} seconds`;
-
-                if (elapsedTime >= poseHoldDuration) {
-                    showCompletionModal();
-                }
-            } else {
-                poseHoldStartTime = null;
-                document.getElementById('timer').textContent = `Hold Pose: 0 / ${poseHoldDuration} seconds`;
-            }
-        }
-
-        function showCompletionModal() {
-            document.getElementById('modal').style.display = 'block';
-        }
-
-        function goToStart() {
-            document.getElementById('modal').style.display = 'none';
-            poseHoldStartTime = null;
-            document.getElementById('timer').textContent = `Hold Pose: 0 / ${poseHoldDuration} seconds`;
         }
 
         function onWindowResize() {
@@ -790,7 +533,7 @@ function updateAvatarHead(keypoints) {
             controls.update();
             renderer.render(scene, camera);
         }
-        // Initialize everything
+
         init3DScene();
         detectPose();
         animate();

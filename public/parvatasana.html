@@ -3,32 +3,37 @@
 <head>
   <title>Pose Detection</title>
   <style>
+    /* Define general styling for the page */
     body {
       font-family: Arial, sans-serif;
       margin: 0;
       padding: 20px;
     }
-    
+
+    /* Styling for the pose information section */
     #pose-info {
       margin-top: 20px;
       padding: 10px;
       background-color: #f4f4f4;
       border: 1px solid #ddd;
     }
-    
+
+    /* Styling for the accuracy bar */
     .accuracy-bar {
       width: 100%;
       height: 20px;
       background-color: #ccc;
       margin-top: 10px;
     }
-    
+
+    /* Styling for the accuracy bar fill animation */
     .accuracy-bar-fill {
       height: 100%;
       background-color: black;
       transition: width 0.5s ease;
     }
 
+    /* Styling for the modal overlay */
     #modal {
       display: none;
       position: fixed;
@@ -39,7 +44,8 @@
       height: 100%;
       background-color: rgba(0,0,0,0.5);
     }
-
+    
+    /* Styling for the modal content */
     .modal-content {
       background-color: white;
       margin: 15% auto;
@@ -48,7 +54,8 @@
       width: 300px;
       text-align: center;
     }
-
+    
+    /* Styling for the timer display */
     #timer {
       font-size: 24px;
       margin-top: 10px;
@@ -58,6 +65,7 @@
   </style>
 </head>
 <body>
+  <!-- Modal to display when the user successfully holds the pose -->
   <div id="modal">
     <div class="modal-content">
       <h2>Good Job!</h2>
@@ -67,15 +75,19 @@
     </div>
   </div>
 
-  <h1>Pose Detection</h1>
-  
+  <!-- Title of the pose detection application -->
+  <h1>Pose Detection-Parvatasana</h1>
+
+  <!-- Section to display video and pose detection overlay -->
   <div id="pose-detection">
     <video id="videoElement" width="640" height="480" autoplay></video>
     <canvas id="poseCanvas" width="640" height="480"></canvas>
   </div>
 
+  <!-- Timer to track pose hold duration -->
   <div id="timer">Hold Pose: 0 / 2 seconds</div>
-  
+
+  <!-- Section to display pose accuracy feedback -->
   <div id="pose-info">
     <h2>Parvatasana Feedback</h2>
     <div style="display: flex; justify-content: space-between;">
@@ -106,18 +118,21 @@
       </div>
     </div>
   </div>
-  
+
+  <!-- Include TensorFlow.js and PoseNet model libraries -->
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@2.8.6"></script>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/posenet@2.2.2"></script>
   <script>
+    // Reference to video and canvas elements
     const video = document.getElementById('videoElement');
     const canvas = document.getElementById('poseCanvas');
     const ctx = canvas.getContext('2d');
     const timer = document.getElementById('timer');
     
-    let poseHoldStartTime = null;
-    let poseHoldDuration = 2; // 2 seconds hold
+    let poseHoldStartTime = null; // Variable to track pose hold start time
+    let poseHoldDuration = 2; // Duration in seconds to hold the pose
 
+    //2 angles are getting measured and their corresponding ranges are given
     const shoulderElbowHipAngleThreshold = {
       min: 70,
       max: 150
@@ -128,30 +143,35 @@
     };
     const wristProximityThreshold = 50;
 
+    // Initialize pose detection using PoseNet
     async function detectPose() {
-      const net = await posenet.load();
-      
+    const net = await posenet.load(); // Load PoseNet model
+
+      // Access user's webcam
       navigator.mediaDevices.getUserMedia({ video: true, audio: false })
         .then((stream) => {
-          video.srcObject = stream;
+          video.srcObject = stream;// Stream video to the video element
           video.onloadedmetadata = () => {
-            video.play();
-            updatePose(net);
+            video.play();// Start video playback
+            updatePose(net);// Begin pose detection
           };
         })
         .catch((err) => {
-          console.error('Error accessing webcam:', err);
+          console.error('Error accessing webcam:', err); // Log errors if webcam access fails
         });
     }
 
+    // Continuously update pose detection
     async function updatePose(net) {
       const pose = await net.estimateSinglePose(video, {
         flipHorizontal: true
-      });
+      });// Estimate pose
 
+      // Clear previous canvas drawing and draw the video frame
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
+      // Extract keypoints 
       const leftAnkle = pose.keypoints[15];
       const leftKnee = pose.keypoints[13];
       const leftShoulder = pose.keypoints[5];
@@ -166,12 +186,14 @@
       const rightWrist = pose.keypoints[10];
       const rightHip = pose.keypoints[12];
 
+      //calculate accurecies
       const staightnessLeftLeg = calculateLeftLegAccuracy(leftAnkle, leftKnee, leftHip);
       const straightnessTorse = calculateTorseAccuracy(leftKnee, leftHip, leftShoulder);
       const staightnessLeftArm = calculateLeftStraightArmAccuracy(leftShoulder, leftElbow, leftWrist);
 
       const overallAccuracy = Math.max(0, Math.min(100, Math.round((staightnessLeftLeg * 0.4 + straightnessTorse * 0.2 + staightnessLeftArm * 0.4))));
 
+      // Update the UI elements with accuracy values
       document.getElementById('leftLeg').textContent = staightnessLeftLeg.toFixed(2);
       document.getElementById('leftLegBar').style.width = `${staightnessLeftLeg}%`;
 
@@ -189,6 +211,7 @@
       requestAnimationFrame(() => updatePose(net));
     }
 
+    // Check if pose is held accurately for the required duration
     function checkPoseAccuracy(accuracy) {
       if (accuracy >= 70) {
         if (poseHoldStartTime === null) {
@@ -216,6 +239,7 @@
       document.getElementById('modal').style.display = 'none';
     }
 
+    //calculating the accuracy for the respective joints
     function calculateLeftLegAccuracy(ankle, knee, hip) {
       const leftLegAngle = calculateAngle(ankle, knee, hip);
       const leftLegAccuracy = getAccuracyPercentage(leftLegAngle, 100, 190);
@@ -234,6 +258,7 @@
       return leftLegAccuracy * 100;
     }
 
+    //general function to calculate the angle between 3 points
     function calculateAngle(p1, p2, p3) {
       const v1 = { x: p1.position.x - p2.position.x, y: p1.position.y - p2.position.y };
       const v2 = { x: p3.position.x - p2.position.x, y: p3.position.y - p2.position.y };
@@ -244,6 +269,7 @@
       return angle;
     }
 
+    //checking if the angle is within the range and determining the accuracy
     function getAccuracyPercentage(value, min, max) {
       if (value >= min && value <= max) {
         return 1;

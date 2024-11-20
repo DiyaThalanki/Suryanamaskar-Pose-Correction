@@ -3,31 +3,32 @@
 <head>
   <title>Hasta Padasana Pose Detection</title>
   <style>
+    /* Basic styling for body layout */
     body {
       font-family: Arial, sans-serif;
       margin: 0;
       padding: 20px;
     }
-    
+    /* Styling for the feedback section */
     #pose-info {
       margin-top: 20px;
       padding: 10px;
       background-color: #f4f4f4;
       border: 1px solid #ddd;
     }
-    
+    /* Flex layout for accuracy rows */
     .accuracy-row {
       display: flex;
       justify-content: space-between;
       align-items: center;
       margin-top: 10px;
     }
-
+  /* Container styling for each accuracy metric */
     .accuracy-container {
       width: 30%;
       text-align: center;
     }
-
+    /* Style for the accuracy progress bar */
     .accuracy-bar {
       width: 100%;
       height: 20px;
@@ -42,7 +43,7 @@
       transition: width 0.5s ease;
       border-radius: 10px;
     }
-
+    /* Modal styling for feedback prompt */
     #modal {
       display: none;
       position: fixed;
@@ -61,6 +62,7 @@
       width: 300px;
       text-align: center;
     }
+    /* Styling for the pose hold timer */
     #timer {
       font-size: 24px;
       margin-top: 10px;
@@ -135,7 +137,9 @@
     const legAngleMin = 160;
     const legAngleMax = 180;
     const forwardBendMax = 120;
-
+    // Function to initialize and load the PoseNet model
+    // - Loads the PoseNet model asynchronously
+    // - Starts video stream and calls `updatePose` function for pose estimation
     async function detectPose() {
       const net = await posenet.load();
       
@@ -151,7 +155,12 @@
           console.error('Error accessing webcam:', err);
         });
     }
-
+    // Function to update the pose estimation and accuracy
+    // - Estimates the user's pose using the PoseNet model
+    // - Draws the video and pose keypoints on the canvas
+    // - Calculates angles and accuracies for legs and forward bend
+    // - Updates the displayed values and accuracy bars
+    // - Continuously calls itself for real-time pose detection
     async function updatePose(net) {
       const pose = await net.estimateSinglePose(video, {
         flipHorizontal: true
@@ -201,7 +210,10 @@
 
       requestAnimationFrame(() => updatePose(net));
     }
-
+    // Function to calculate the angle between three points
+    // - Takes three keypoints (p1, p2, p3) as input
+    // - Computes the angle between vectors formed by these points
+    // - Returns the angle in degrees
     function calculateAngle(p1, p2, p3) {
       const v1 = { x: p1.position.x - p2.position.x, y: p1.position.y - p2.position.y };
       const v2 = { x: p3.position.x - p2.position.x, y: p3.position.y - p2.position.y };
@@ -211,7 +223,11 @@
       const angle = Math.acos(dot / (mag1 * mag2)) * (180 / Math.PI);
       return angle;
     }
-
+    // Function to check the user's pose accuracy
+    // - Evaluates the overall accuracy of the pose
+    // - If the accuracy meets the threshold, starts the hold timer
+    // - Displays a modal after the required hold duration is achieved
+    // - Resets the timer if the accuracy falls below the threshold
     function checkPoseAccuracy(accuracy) {
       if (accuracy >= 70) {
         if (poseHoldStartTime === null) {
@@ -230,11 +246,13 @@
         timer.textContent = `Hold Pose: 0 / ${poseHoldDuration} seconds`;
       }
     }
-
+    // Function to navigate to the next asana
+    // - Redirects the user to the "Hastauttanasana" page
     function goToNextAsana() {
       window.location.href = 'hastauttanasana.html';
     }
-
+    // Function to close the modal window
+    // - Hides the modal allowing the user to continue practicing the current asana
     function closeModal() {
       document.getElementById('modal').style.display = 'none';
     }

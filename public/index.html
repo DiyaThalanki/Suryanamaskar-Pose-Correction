@@ -3,12 +3,14 @@
 <head>
   <title>Yoga Pose Detection Flow</title>
   <style>
+    /* Reset margin and padding for all elements */
     * {
       margin: 0;
       padding: 0;
       box-sizing: border-box;
     }
 
+    /* Body styling */
     body {
       font-family: 'Arial', sans-serif;
       background: linear-gradient(135deg, #f6d365 0%, #fda085 100%);
@@ -21,6 +23,7 @@
       color: #333;
     }
 
+    /* Main container styling */
     .container {
       background-color: rgba(255, 255, 255, 0.95);
       border-radius: 24px;
@@ -31,6 +34,7 @@
       width: 100%;
     }
 
+    /* Heading styling */
     h1 {
       color: #2c3e50;
       margin-bottom: 35px;
@@ -38,6 +42,7 @@
       font-weight: 700;
     }
 
+    /* Styling for the yoga image */
     .yoga-image {
       width: 100%;
       max-width: 500px;
@@ -48,6 +53,7 @@
       box-shadow: 0 10px 25px rgba(0,0,0,0.15);
     }
 
+    /* Button container layout */
     .button-container {
       display: flex;
       flex-wrap: wrap;
@@ -57,6 +63,7 @@
       padding: 0 20px;
     }
 
+    /* Styling for individual buttons */
     .start-button {
       text-decoration: none;
       padding: 15px 25px;
@@ -70,17 +77,20 @@
       box-shadow: 0 4px 6px rgba(0,0,0,0.1);
     }
 
+    /* Button hover effects */
     .start-button:hover {
       background-color: #45a049;
       transform: translateY(-2px);
       box-shadow: 0 6px 12px rgba(0,0,0,0.15);
     }
 
+    /* Button active effects */
     .start-button:active {
       transform: translateY(0);
       box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     }
 
+    /* Responsive styles for smaller screens */
     @media (max-width: 768px) {
       .container {
         padding: 25px;
@@ -104,16 +114,18 @@
 </head>
 <body>
   <div class="container">
+    <!-- Main heading for the page -->
     <h1>Yoga Pose Detection Flow</h1>
     
+    <!-- Yoga image -->
     <img src="yogapic.jpeg" alt="Yoga Pose" class="yoga-image">
     
+    <!-- Container for navigation buttons -->
     <div class="button-container">
       <a href="pose1.html" class="start-button">Start pose1</a>
       <a href="pranamasana_og.html" class="start-button">Start Pranamasana</a>
       <a href="hastapadasna_og.html" class="start-button">Start Hasta Padasana</a>
       <a href="hastauttanasana.html" class="start-button">Start Uttanasana</a>
-      
       <a href="ashwa_sanchalasana.html" class="start-button">Start Ashwa-Sanchalasna</a>
       <a href="parvatasana.html" class="start-button">Start Parvatasana</a>
     </div>

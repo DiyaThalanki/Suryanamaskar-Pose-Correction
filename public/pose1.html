@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Yoga Studio with Avatar Pose Mapping</title>
+    <!-- Import necessary libraries -->
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -18,19 +19,22 @@
     </style>
 </head>
 <body>
+    <!-- Div for pose detection -->
     <div id="pose-detection">
         <video id="video" width="720" height="700" autoplay style="display: none;"></video>
         <canvas id="output" width="720" height="700"></canvas>
         <div id="status"></div>
     </div>
+    <!-- Div for 3D yoga studio visualization -->
     <div id="yoga-studio"></div>
 
     <script>
-        // [Previous code for init3DScene, loadStudioAndAvatar, updateAvatarArms, updateAvatarLegs, etc. remains the same]
+        // Declare variables for 3D scene, camera, renderer, and controls
         let scene, camera, renderer, controls;
         let avatar, avatarSkeleton, avatarBones = {};
         let studioModel;
 
+        // Function to set up the camera by requesting video access
         async function setupCamera() {
             const video = document.getElementById('video');
             const stream = await navigator.mediaDevices.getUserMedia({ video: true });
@@ -40,18 +44,23 @@
             });
         }
 
+        // Initialize the 3D scene
         function init3DScene() {
+            // Create a new scene with a light gray background
             scene = new THREE.Scene();
             scene.background = new THREE.Color(0xcccccc);
 
+            // Set up the camera with perspective projection
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / 2 / window.innerHeight, 0.1, 1000);
             camera.position.set(0, 1, 3);
 
+            // Set up the WebGL renderer
             renderer = new THREE.WebGLRenderer({ antialias: true });
             renderer.setSize(window.innerWidth / 2, window.innerHeight);
             renderer.shadowMap.enabled = true;
             document.getElementById('yoga-studio').appendChild(renderer.domElement);
 
+            // Add ambient and directional lighting to the scene
             const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
             scene.add(ambientLight);
             const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
@@ -59,15 +68,19 @@
             directionalLight.castShadow = true;
             scene.add(directionalLight);
 
+            // Set up orbit controls for the camera
             controls = new THREE.OrbitControls(camera, renderer.domElement);
             controls.target.set(0, 1, 0);
             controls.update();
 
+            // Load the models
             loadStudioAndAvatar();
-            
+
+            // Adjust the scene when the window is resized
             window.addEventListener('resize', onWindowResize, false);
         }
 
+        // Function to load the yoga studio model
         function loadStudioAndAvatar() {
             const loader = new THREE.GLTFLoader();
             
@@ -76,6 +89,7 @@
                 (gltf) => {
                     studioModel = gltf.scene;
                     scene.add(studioModel);
+                    // Ensure all meshes in the studio can cast and receive shadows
                     studioModel.traverse((node) => {
                         if (node.isMesh) {
                             node.castShadow = true;
@@ -88,7 +102,7 @@
                 (error) => console.error('Error loading studio:', error)
             );
         }
-
+// Function to load the avatar model
         function loadAvatar() {
             
 
@@ -235,7 +249,7 @@ function updateAvatarLegs(keypoints) {
     updateBoneRotation('LeftUpLeg', angles.leftHip, 'z', -1);
     updateBoneRotation('RightUpLeg', angles.rightHip, 'z', -1);
 
-    // Update knees (mapping to LeftLeg and RightLeg)
+    // Update knees (mapping to LeftLeg and RightLeg) -> commented out because the knee rotations are not stable
     //updateBoneRotation('LeftLeg', angles.leftKnee, 'x', 1);
     //updateBoneRotation('RightLeg', angles.rightKnee, 'x', -1);
 
@@ -300,7 +314,7 @@ function calculateArmAngles(keypoints) {
             leftElbow
         );
     }
-    //angles.leftShoulder = -angles.leftShoulder
+    // Shoulder angles
     if (rightShoulder && rightElbow) {
         angles.rightShoulder = calculateAngle(
             { x: rightShoulder.x - 50, y: rightShoulder.y },
@@ -364,7 +378,7 @@ function updateAvatarArms(keypoints) {
     updateBoneRotation('LeftArm', angles.leftShoulder, 'x', 1);
     updateBoneRotation('RightArm', angles.rightShoulder, 'x', -1);
 
-    // Update forearms (elbows) -> y axis of
+    // Update forearms (elbows) -> commented out because elbow rotation is not stable
     //updateBoneRotation('LeftForeArm', angles.leftElbow, 'x', 1);
     //updateBoneRotation('RightForeArm', angles.rightElbow, 'x', 1);
 
@@ -441,35 +455,39 @@ function updateAvatarHead(keypoints) {
         }
     }
 }
+        // Function to detect the user's pose using MediaPipe Pose
         async function detectPose() {
+            // Initialize the MediaPipe Pose object
             const pose = new Pose({
                 locateFile: (file) => {
                     return `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`;
                 }
             });
 
+            // Set options for the pose detector
             pose.setOptions({
-                modelComplexity: 1,
-                smoothLandmarks: true,
-                enableSegmentation: false,
-                smoothSegmentation: true,
-                minDetectionConfidence: 0.5,
-                minTrackingConfidence: 0.5
+                modelComplexity: 1, // Complexity of the pose model (higher = more accurate, slower)
+                smoothLandmarks: true, // Enable smoothing of detected landmarks
+                enableSegmentation: false, // Disable segmentation for this use case
+                smoothSegmentation: true, // Smoothing for segmentation (not used here)
+                minDetectionConfidence: 0.5, // Minimum confidence to detect poses
+                minTrackingConfidence: 0.5 // Minimum confidence for tracking
             });
-
             const video = await setupCamera();
             video.play();
 
             const canvas = document.getElementById('output');
             const ctx = canvas.getContext('2d');
 
+            // Define what happens when pose detection results are received
             pose.onResults(function(results) {
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
                 ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
+                // If pose landmarks are detected
                 if (results.poseLandmarks) {
                     const keypoints = results.poseLandmarks.map((landmark, index) => {
-                        // Map MediaPipe landmarks to PoseNet-like format
+                        // Map MediaPipe landmarks to PoseNet-like format because we were using pose-net before
                         const posenetPartMap = {
                             0: 'nose', 
                             11: 'leftShoulder', 
@@ -496,7 +514,7 @@ function updateAvatarHead(keypoints) {
                         };
                     }).filter(kp => kp.part !== '');
 
-                    // Draw keypoints
+                    // Draw detected keypoints on the canvas
                     keypoints.forEach(keypoint => {
                         if (keypoint.score > 0.9 && 
                             ['leftShoulder', 'rightShoulder', 'leftElbow', 'rightElbow', 'leftWrist', 'rightWrist', 'nose', 'leftHip', 'rightHip', 'leftKnee', 'rightKnee', 'leftAnkle', 'rightAnkle'].includes(keypoint.part)) {
@@ -506,7 +524,7 @@ function updateAvatarHead(keypoints) {
                             ctx.fill();
                         }
                     });
-
+                    // Update the avatar's arms and legs based on the detected keypoints
                     updateAvatarArms(keypoints);
                     updateAvatarLegs(keypoints);
                 }
